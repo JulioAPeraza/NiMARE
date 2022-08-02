@@ -4,6 +4,7 @@ import logging
 
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
 from nilearn._utils import load_niimg
 from nilearn.masking import apply_mask
 from tqdm.auto import tqdm
@@ -13,7 +14,7 @@ from nimare.decode.utils import weight_priors
 from nimare.meta.cbma.base import CBMAEstimator
 from nimare.meta.cbma.mkda import MKDAChi2
 from nimare.stats import pearson
-from nimare.utils import _check_type, _safe_transform
+from nimare.utils import _check_ncores, _check_type, _safe_transform, tqdm_joblib
 
 LGR = logging.getLogger(__name__)
 
@@ -114,6 +115,10 @@ class CorrelationDecoder(Decoder):
 
         * Remove low-memory option in favor of sparse arrays.
 
+    .. versionchanged:: 0.0.13
+
+        * Add n_cores parameter to use for parallelization.
+
     Parameters
     ----------
     feature_group : :obj:`str`
@@ -126,6 +131,11 @@ class CorrelationDecoder(Decoder):
         Meta-analysis estimator. Default is :class:`~nimare.meta.mkda.MKDAChi2`.
     target_image : :obj:`str`
         Name of meta-analysis results image to use for decoding.
+    n_cores : :obj:`int`, optional
+        Number of cores to use for parallelization.
+        This is only used if ``null_method=="montecarlo"``.
+        If <=0, defaults to using all available cores.
+        Default is 1.
 
     Warnings
     --------
@@ -146,6 +156,7 @@ class CorrelationDecoder(Decoder):
         frequency_threshold=0.001,
         meta_estimator=None,
         target_image="z_desc-specificity",
+        n_cores=1,
     ):
 
         if meta_estimator is None:
@@ -158,6 +169,7 @@ class CorrelationDecoder(Decoder):
         self.frequency_threshold = frequency_threshold
         self.meta_estimator = meta_estimator
         self.target_image = target_image
+        self.n_cores = _check_ncores(n_cores)
 
     def _fit(self, dataset):
         """Generate feature-specific meta-analytic maps for dataset.
@@ -178,6 +190,17 @@ class CorrelationDecoder(Decoder):
         """
         self.masker = dataset.masker
 
+        n_features = len(self.features_)
+        images_ = [[]] * n_features
+        with tqdm_joblib(tqdm(total=n_features)):
+            Parallel(n_jobs=self.n_cores)(
+                delayed(self._run_fit)(i_feature, feature, dataset, images_)
+                for i_feature, feature in enumerate(self.features_)
+            )
+
+        self.images_ = np.vstack(images_)
+
+    def _run_fit(self, i_feature, feature, dataset, images_):
         n_features = len(self.features_)
         for i_feature, feature in enumerate(tqdm(self.features_, total=n_features)):
             feature_ids = dataset.get_studies_by_label(
@@ -203,12 +226,8 @@ class CorrelationDecoder(Decoder):
                 self.target_image,
                 return_type="array",
             )
-            if i_feature == 0:
-                images_ = np.zeros((len(self.features_), len(feature_data)), feature_data.dtype)
 
-            images_[i_feature, :] = feature_data
-
-        self.images_ = images_
+            images_[i_feature] = feature_data
 
     def transform(self, img):
         """Correlate target image with each feature-specific meta-analytic map.
