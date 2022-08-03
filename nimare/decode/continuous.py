@@ -201,33 +201,31 @@ class CorrelationDecoder(Decoder):
         self.images_ = np.vstack(images_)
 
     def _run_fit(self, i_feature, feature, dataset, images_):
-        n_features = len(self.features_)
-        for i_feature, feature in enumerate(tqdm(self.features_, total=n_features)):
-            feature_ids = dataset.get_studies_by_label(
-                labels=[feature],
-                label_threshold=self.frequency_threshold,
-            )
-            # Limit selected studies to studies with valid data
-            feature_ids = sorted(list(set(feature_ids).intersection(self.inputs_["id"])))
+        feature_ids = dataset.get_studies_by_label(
+            labels=[feature],
+            label_threshold=self.frequency_threshold,
+        )
+        # Limit selected studies to studies with valid data
+        feature_ids = sorted(list(set(feature_ids).intersection(self.inputs_["id"])))
 
-            # Create the reduced Dataset
-            feature_dset = dataset.slice(feature_ids)
+        # Create the reduced Dataset
+        feature_dset = dataset.slice(feature_ids)
 
-            # Check if the meta method is a pairwise estimator
-            # This seems like a somewhat inelegant solution
-            if "dataset2" in inspect.getfullargspec(self.meta_estimator.fit).args:
-                nonfeature_ids = sorted(list(set(self.inputs_["id"]) - set(feature_ids)))
-                nonfeature_dset = dataset.slice(nonfeature_ids)
-                meta_results = self.meta_estimator.fit(feature_dset, nonfeature_dset)
-            else:
-                meta_results = self.meta_estimator.fit(feature_dset)
+        # Check if the meta method is a pairwise estimator
+        # This seems like a somewhat inelegant solution
+        if "dataset2" in inspect.getfullargspec(self.meta_estimator.fit).args:
+            nonfeature_ids = sorted(list(set(self.inputs_["id"]) - set(feature_ids)))
+            nonfeature_dset = dataset.slice(nonfeature_ids)
+            meta_results = self.meta_estimator.fit(feature_dset, nonfeature_dset)
+        else:
+            meta_results = self.meta_estimator.fit(feature_dset)
 
-            feature_data = meta_results.get_map(
-                self.target_image,
-                return_type="array",
-            )
+        feature_data = meta_results.get_map(
+            self.target_image,
+            return_type="array",
+        )
 
-            images_[i_feature] = feature_data
+        images_[i_feature] = feature_data
 
     def transform(self, img):
         """Correlate target image with each feature-specific meta-analytic map.
