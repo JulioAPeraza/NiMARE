@@ -191,15 +191,20 @@ class CorrelationDecoder(Decoder):
         self.masker = dataset.masker
 
         n_features = len(self.features_)
-        images_ = [[]] * n_features
         with tqdm_joblib(tqdm(total=n_features)):
-            Parallel(n_jobs=self.n_cores, backend="threading")(
-                delayed(self._run_fit)(i_feature, feature, dataset, images_)
-                for i_feature, feature in enumerate(self.features_)
+            images_, feature_idx = zip(
+                *Parallel(n_jobs=self.n_cores)(
+                    delayed(self._run_fit)(i_feature, feature, dataset)
+                    for i_feature, feature in enumerate(self.features_)
+                )
             )
-        self.images_ = np.vstack(images_)
+        # Convert to an array and sort the images_ array based on the feature index.
+        print(images_, flush=True)
+        print(feature_idx, flush=True)
+        images_ = np.array(images_)[np.array(feature_idx)]
+        self.images_ = images_
 
-    def _run_fit(self, i_feature, feature, dataset, images_):
+    def _run_fit(self, i_feature, feature, dataset):
         feature_ids = dataset.get_studies_by_label(
             labels=[feature],
             label_threshold=self.frequency_threshold,
@@ -224,7 +229,7 @@ class CorrelationDecoder(Decoder):
             return_type="array",
         )
 
-        images_[i_feature] = feature_data
+        return feature_data, i_feature
 
     def transform(self, img):
         """Correlate target image with each feature-specific meta-analytic map.
