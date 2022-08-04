@@ -193,7 +193,7 @@ class CorrelationDecoder(Decoder):
         n_features = len(self.features_)
         images_ = [[]] * n_features
         with tqdm_joblib(tqdm(total=n_features)):
-            Parallel(n_jobs=self.n_cores, timeout=99999)(
+            Parallel(n_jobs=self.n_cores, backend="threading")(
                 delayed(self._run_fit)(i_feature, feature, dataset, images_)
                 for i_feature, feature in enumerate(self.features_)
             )
