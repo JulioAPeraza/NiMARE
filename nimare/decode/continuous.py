@@ -197,7 +197,7 @@ class CorrelationDecoder(Decoder):
                 delayed(self._run_fit)(i_feature, feature, dataset, images_)
                 for i_feature, feature in enumerate(self.features_)
             )
-
+        print(images_, flush=True)
         self.images_ = np.vstack(images_)
 
     def _run_fit(self, i_feature, feature, dataset, images_):
@@ -226,6 +226,7 @@ class CorrelationDecoder(Decoder):
         )
 
         images_[i_feature] = feature_data
+        print(images_[i_feature], flush=True)
 
     def transform(self, img):
         """Correlate target image with each feature-specific meta-analytic map.
