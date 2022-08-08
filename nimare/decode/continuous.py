@@ -133,7 +133,6 @@ class CorrelationDecoder(Decoder):
         Name of meta-analysis results image to use for decoding.
     n_cores : :obj:`int`, optional
         Number of cores to use for parallelization.
-        This is only used if ``null_method=="montecarlo"``.
         If <=0, defaults to using all available cores.
         Default is 1.
 
@@ -199,8 +198,6 @@ class CorrelationDecoder(Decoder):
                 )
             )
         # Convert to an array and sort the images_ array based on the feature index.
-        print(images_, flush=True)
-        print(feature_idx, flush=True)
         images_ = np.array(images_)[np.array(feature_idx)]
         self.images_ = images_
 
