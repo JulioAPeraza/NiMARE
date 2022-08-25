@@ -225,7 +225,7 @@ def _update_peak_assignments(
         # Normalize the sampling distribution
         probs_pdf = probs_pdf / np.sum(probs_pdf)
         # Float precision issue in Numba: https://github.com/numba/numba/issues/3426
-        probs_pdf = np.trunc(probs_pdf * (10**12)) / (10**12)
+        # probs_pdf = np.trunc(probs_pdf * (10**12)) / (10**12)
 
         # Sample a single element (corresponding to a y_i and c_i assignment for the ptoken)
         # from the sampling distribution
