@@ -222,26 +222,11 @@ class CBMAEstimator(Estimator):
         """
         if maps_key in self.inputs_.keys():
             LGR.debug(f"Loading pre-generated MA maps ({maps_key}).")
-            all_exp = []
-            all_coords = []
-            all_data = []
-            for i_exp, img in enumerate(self.inputs_[maps_key]):
-                img_data = nib.load(img).get_fdata()
-                nonzero_idx = np.where(img_data != 0)
+            ma_map_lst = []
+            for ma_map in self.inputs_[maps_key]:
+                ma_map_lst.append(sparse.load_npz(ma_map))
 
-                all_exp.append(np.full(nonzero_idx[0].shape[0], i_exp))
-                all_coords.append(np.vstack(nonzero_idx))
-                all_data.append(img_data[nonzero_idx])
-
-            n_studies = len(self.inputs_[maps_key])
-            shape = img_data.shape
-            kernel_shape = (n_studies,) + shape
-
-            exp = np.hstack(all_exp)
-            coords = np.vstack((exp.flatten(), np.hstack(all_coords)))
-            data = np.hstack(all_data).flatten()
-
-            ma_maps = sparse.COO(coords, data, shape=kernel_shape)
+            ma_maps = sparse.stack(ma_map_lst)
 
         else:
             LGR.debug(f"Generating MA maps from coordinates ({coords_key}).")

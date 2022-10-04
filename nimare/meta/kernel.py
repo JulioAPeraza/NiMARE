@@ -63,11 +63,9 @@ class KernelTransformer(NiMAREBase):
         # Determine names for kernel-specific files
         keys = sorted(params.keys())
         param_str = "_".join(f"{k}-{str(params[k])}" for k in keys)
-        self.filename_pattern = (
-            f"study-[[id]]_{param_str}_{self.__class__.__name__}.nii.gz".replace(
-                "[[", "{"
-            ).replace("]]", "}")
-        )
+        self.filename_pattern = f"study-[[id]]_{param_str}_{self.__class__.__name__}.npz".replace(
+            "[[", "{"
+        ).replace("]]", "}")
         self.image_type = f"{param_str}_{self.__class__.__name__}"
 
     def transform(self, dataset, masker=None, return_type="image"):
@@ -196,7 +194,7 @@ class KernelTransformer(NiMAREBase):
         imgs = []
         # Loop over exp ids since sparse._coo.core.COO is not iterable
         for i_exp, id_ in enumerate(transformed_maps[1]):
-            if isinstance(transformed_maps[0][i_exp], sparse._coo.core.COO):
+            if (return_type == "array") or (return_type == "image"):
                 # This step is slow, but it is here just in case user want a
                 # return_type = "array", "image", or "dataset"
                 kernel_data = transformed_maps[0][i_exp].todense()
@@ -209,12 +207,11 @@ class KernelTransformer(NiMAREBase):
                 img = nib.Nifti1Image(kernel_data, mask.affine)
                 imgs.append(img)
             elif return_type == "dataset":
-                img = nib.Nifti1Image(kernel_data, mask.affine)
                 out_file = os.path.join(dataset.basepath, self.filename_pattern.format(id=id_))
-                img.to_filename(out_file)
+                sparse.save_npz(out_file, transformed_maps[0][i_exp])
                 dataset.images.loc[dataset.images["id"] == id_, self.image_type] = out_file
 
-        del kernel_data, transformed_maps
+        del transformed_maps
 
         if return_type == "array":
             return np.vstack(imgs)

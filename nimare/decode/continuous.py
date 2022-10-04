@@ -4,6 +4,7 @@ import logging
 
 import numpy as np
 import pandas as pd
+import sparse
 from joblib import Parallel, delayed
 from nilearn._utils import load_niimg
 from nilearn.masking import apply_mask
@@ -14,7 +15,7 @@ from nimare.decode.utils import weight_priors
 from nimare.meta.cbma.base import CBMAEstimator
 from nimare.meta.cbma.mkda import MKDAChi2
 from nimare.stats import pearson
-from nimare.utils import _check_ncores, _check_type, _safe_transform, tqdm_joblib
+from nimare.utils import _check_ncores, _check_type, tqdm_joblib
 
 LGR = logging.getLogger(__name__)
 
@@ -313,12 +314,14 @@ class CorrelationDistributionDecoder(Decoder):
             Masked meta-analytic maps
         """
         self.masker = dataset.masker
+        mask_data = self.masker.mask_img.get_fdata().astype(bool)
 
         n_features = len(self.features_)
         with tqdm_joblib(tqdm(total=n_features)):
             images_ = dict(
                 Parallel(n_jobs=self.n_cores)(
-                    delayed(self._run_fit)(feature, dataset) for feature in self.features_
+                    delayed(self._run_fit)(feature, dataset, mask_data)
+                    for feature in self.features_
                 )
             )
 
@@ -326,7 +329,7 @@ class CorrelationDistributionDecoder(Decoder):
         self.features_ = [f for f in self.features_ if f in images_.keys()]
         self.images_ = images_
 
-    def _run_fit(self, feature, dataset):
+    def _run_fit(self, feature, dataset, mask_data):
         feature_ids = dataset.get_studies_by_label(
             labels=[feature], label_threshold=self.frequency_threshold
         )
@@ -338,11 +341,16 @@ class CorrelationDistributionDecoder(Decoder):
             img for i_img, img in enumerate(self.inputs_["images"]) if i_img in selected_id_idx
         ]
         if len(test_imgs):
-            feature_arr = _safe_transform(
-                test_imgs,
-                self.masker,
-                memfile=None,
-            )
+            ma_map_lst = []
+            for ma_map in test_imgs:
+                ma_map_sp = sparse.load_npz(ma_map)
+
+                # Indexing the sparse array is slow, perform masking in the dense array
+                ma_map_sp = ma_map_sp.todense().reshape(-1)
+                ma_map_lst.append(ma_map_sp[mask_data.reshape(-1)])
+
+            feature_arr = np.vstack(ma_map_lst)
+
             return feature, feature_arr
         else:
             LGR.info(f"Skipping feature '{feature}'. No images found.")
